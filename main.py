@@ -21,16 +21,30 @@ def base64_to_nparray(b64_string):
 
 
 def main():
-    # Fetch faces once at the start
-    fetch_faces()
+    # Fetch faces once at the start, retry on failure
+    import time
+    while True:
+        try:
+            fetch_faces()
+            # If faces_cache is populated, break
+            if faces_cache['encodings'] and faces_cache['names']:
+                break
+            else:
+                print("Faces API returned no faces, retrying in 3 seconds...")
+        except Exception as e:
+            print(f"Error fetching faces: {e}. Retrying in 3 seconds...")
+        time.sleep(3)
+
     video_capture = cv2.VideoCapture(0)
     while not video_capture.isOpened():
         print("Error: Could not open webcam. Retrying in 3 seconds...")
-        import time
         time.sleep(3)
         video_capture = cv2.VideoCapture(0)
 
     print("Starting camera. Press 'q' to quit.")
+
+    prev_gray = None
+    movement_threshold = 5000  # Tune as needed
 
     while True:
         ret, frame = video_capture.read()
@@ -41,6 +55,17 @@ def main():
             time.sleep(2)
             video_capture = cv2.VideoCapture(0)
             continue
+
+        # Movement detection
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        movement_detected = False
+        if prev_gray is not None:
+            frame_delta = cv2.absdiff(prev_gray, gray)
+            thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
+            movement = cv2.countNonZero(thresh)
+            if movement > movement_threshold:
+                movement_detected = True
+        prev_gray = gray
 
         # Check if the frame is black (all pixels are very dark)
         if np.mean(frame) < 10:  # Threshold can be adjusted if needed
@@ -55,6 +80,12 @@ def main():
         rgb_frame = frame[:, :, ::-1]
         face_locations = face_recognition.face_locations(rgb_frame)
         face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+        # Only send movement notification if there are no faces
+        if movement_detected and len(face_locations) == 0:
+            print("Movement detected but no face found.")
+            if can_send_notification('movement_no_face'):
+                send_notification(NOTIFICATION_EMAIL, "Movement Detected", "Movement detected but no face found.", JWT_TOKEN, event_key='movement_no_face')
 
         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
             encodings = faces_cache['encodings'] if faces_cache['encodings'] else []
