@@ -50,6 +50,8 @@ def main():
         ret, frame = video_capture.read()
         if not ret:
             print("Failed to grab frame. Attempting to restart camera...")
+            if can_send_notification('camera_off'):
+                send_notification(NOTIFICATION_EMAIL, "Camera Off", "Camera is off or cannot grab frame.", JWT_TOKEN, event_key='camera_off')
             video_capture.release()
             import time
             time.sleep(2)
