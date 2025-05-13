@@ -11,7 +11,8 @@ JWT_TOKEN = os.getenv('NOTIFICATION_JWT_TOKEN', 'YOUR_JWT_TOKEN_HERE')
 # This will store face encodings and names after fetching once
 faces_cache = {
     'encodings': [],
-    'names': []
+    'names': [],
+    'is_authorized': []
 }
 
 def fetch_faces():
@@ -32,10 +33,12 @@ def fetch_faces():
             from main import base64_to_nparray
             faces_cache['encodings'] = [base64_to_nparray(f['face_encoding']) for f in faces if 'face_encoding' in f]
             faces_cache['names'] = [f['name'] for f in faces]
-            print(f"[Faces API] Loaded {len(faces)} faces: {[f['name'] for f in faces]}")
+            faces_cache['is_authorized'] = [f.get('is_authorized', False) for f in faces]
+            print(f"[Faces API] Loaded {len(faces)} faces: {[f['name'] for f in faces]}, is_authorized: {faces_cache['is_authorized']}")
         else:
             print("[Faces API] No faces found for this user.")
     except Exception as e:
         print(f"[Faces API] Error fetching faces: {e}")
         faces_cache['encodings'] = []
         faces_cache['names'] = []
+        faces_cache['is_authorized'] = []

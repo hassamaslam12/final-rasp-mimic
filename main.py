@@ -59,19 +59,26 @@ def main():
         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
             encodings = faces_cache['encodings'] if faces_cache['encodings'] else []
             names = faces_cache['names'] if faces_cache['names'] else []
+            is_authorized_list = faces_cache['is_authorized'] if 'is_authorized' in faces_cache else []
             if encodings:
                 distances = face_recognition.face_distance(encodings, face_encoding)
                 best_match_index = np.argmin(distances)
                 name = "unknown"
+                is_authorized = False
                 if distances[best_match_index] < CONFIDENCE_THRESHOLD:
                     name = names[best_match_index]
-                    if can_send_notification(name):
-                        send_notification(NOTIFICATION_EMAIL, f"Known Face Detected: {name}", f"Detected {name} in the car.", JWT_TOKEN, event_key=name)
+                    is_authorized = is_authorized_list[best_match_index] if best_match_index < len(is_authorized_list) else False
+                    if is_authorized:
+                        if can_send_notification(name):
+                            send_notification(NOTIFICATION_EMAIL, f"Known Face Detected: {name}", f"Detected authorized person {name} in the car.", JWT_TOKEN, event_key=name)
+                    else:
+                        if can_send_notification(f"unauthorized_{name}"):
+                            send_notification(NOTIFICATION_EMAIL, f"Unauthorized Access Attempt: {name}", f"This person ({name}) is NOT AUTHORIZED but is trying to access the vehicle.", JWT_TOKEN, event_key=f"unauthorized_{name}")
                 else:
                     if can_send_notification('unknown'):
                         send_notification(NOTIFICATION_EMAIL, "Unknown Face Detected", "An unknown person was detected in the car.", JWT_TOKEN, event_key='unknown')
-                print(f"Detected: {name}, Distance: {distances[best_match_index]:.2f}")
-                color = (0, 255, 0) if name != "unknown" else (0, 0, 255)
+                print(f"Detected: {name}, Distance: {distances[best_match_index]:.2f}, Authorized: {is_authorized}")
+                color = (0, 255, 0) if name != "unknown" and is_authorized else (0, 0, 255)
             else:
                 name = "unknown"
                 color = (0, 0, 255)
