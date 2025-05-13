@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 NOTIFICATION_API_BASEURL = os.getenv('NOTIFICATION_API_BASEURL')
 NOTIFICATION_EMAIL = os.getenv('NOTIFICATION_EMAIL')

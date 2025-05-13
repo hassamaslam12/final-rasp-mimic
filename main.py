@@ -9,7 +9,7 @@ from faces_api import fetch_faces, faces_cache
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 NOTIFICATION_EMAIL = os.getenv('NOTIFICATION_EMAIL')
 JWT_TOKEN = os.getenv('NOTIFICATION_JWT_TOKEN', 'YOUR_JWT_TOKEN_HERE')

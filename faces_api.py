@@ -2,7 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 FACES_API_BASEURL = os.getenv('FACES_API_BASEURL', os.getenv('NOTIFICATION_API_BASEURL'))
 FACES_API_EMAIL = os.getenv('NOTIFICATION_EMAIL')
