@@ -60,11 +60,52 @@ def main():
             print(f"Error fetching faces: {e}. Retrying in 3 seconds...")
         time.sleep(3)
 
-    video_capture = cv2.VideoCapture(0)
-    while not video_capture.isOpened():
-        print("Error: Could not open webcam. Retrying in 3 seconds...")
-        time.sleep(3)
-        video_capture = cv2.VideoCapture(0)
+    # Robust camera initialization with fallback for Raspberry Pi
+    import time
+    import sys
+    frame = None
+    ret = False
+    video_capture = None
+    use_picamera2 = False
+    picam2 = None
+
+    def try_opencv_camera():
+        # Try OpenCV webcam (USB or Pi camera via V4L2)
+        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        return cap if cap.isOpened() else None
+
+    def try_picamera2():
+        # Try Pi Camera using picamera2
+        try:
+            from picamera2 import Picamera2
+            picam = Picamera2()
+            config = picam.create_still_configuration(main={'size': (640, 480)})
+            picam.configure(config)
+            picam.start()
+            return picam
+        except Exception as e:
+            print(f"picamera2 not available or failed to initialize: {e}")
+            return None
+
+    # Main camera loop with fallback
+    while True:
+        video_capture = try_opencv_camera()
+        if video_capture:
+            print("OpenCV camera initialized.")
+            use_picamera2 = False
+            break
+        else:
+            print("OpenCV camera failed. Trying Pi Camera (picamera2)...")
+            picam2 = try_picamera2()
+            if picam2:
+                print("Pi Camera (picamera2) initialized.")
+                use_picamera2 = True
+                break
+            else:
+                print("No camera available. Retrying in 5 seconds...")
+                time.sleep(5)
 
     print("Starting camera. Press 'q' to quit.")
 
@@ -72,21 +113,40 @@ def main():
     movement_threshold = 5000  # Tune as needed
 
     while True:
-        ret, frame = video_capture.read()
-        if not ret:
-            print("Failed to grab frame. Attempting to restart camera...")
-            if can_send_notification('camera_off'):
-                lat, lon = get_location()
-                if lat and lon:
-                    extra_info = f" Location: lat={lat}, lon={lon}"
-                    send_notification(NOTIFICATION_EMAIL, "Camera Off", f"Camera is off or cannot grab frame.{extra_info}", JWT_TOKEN, event_key='camera_off')
-                else:
-                    send_notification(NOTIFICATION_EMAIL, "Camera Off", "Camera is off or cannot grab frame.", JWT_TOKEN, event_key='camera_off')
-            video_capture.release()
-            import time
-            time.sleep(2)
-            video_capture = cv2.VideoCapture(0)
-            continue
+        if use_picamera2:
+            try:
+                frame = picam2.capture_array()
+                ret = True
+            except Exception as e:
+                print(f"Failed to grab frame from Pi Camera: {e}. Reinitializing...")
+                picam2 = try_picamera2()
+                if not picam2:
+                    print("Pi Camera unavailable. Attempting to switch to OpenCV camera...")
+                    video_capture = try_opencv_camera()
+                    if video_capture:
+                        use_picamera2 = False
+                    else:
+                        print("No camera available. Retrying in 5 seconds...")
+                        time.sleep(5)
+                continue
+        else:
+            ret, frame = video_capture.read()
+            if not ret:
+                print("Failed to grab frame from OpenCV camera. Attempting to reinitialize...")
+                video_capture.release()
+                time.sleep(2)
+                video_capture = try_opencv_camera()
+                if not video_capture:
+                    print("OpenCV camera unavailable. Attempting to switch to Pi Camera...")
+                    picam2 = try_picamera2()
+                    if picam2:
+                        use_picamera2 = True
+                    else:
+                        print("No camera available. Retrying in 5 seconds...")
+                        time.sleep(5)
+                continue
+
+        # --- The rest of your main loop logic follows ---
 
         # Movement detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
